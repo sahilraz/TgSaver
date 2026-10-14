@@ -140,7 +140,9 @@ class ChannelService:
 
             # 4. Create a single private archive channel for this source only if no match was found anywhere
             try:
-                channel_desc = f"Private archive for {source_title[:60]}. Managed by TgSaverBot.\n\nDeveloper: @ImJust_Joking"
+                from app.bot.bot_instance import get_bot_username
+                bot_user = await get_bot_username()
+                channel_desc = f"Private archive for {source_title[:60]}.\n\nBot: @{bot_user}\nDeveloper: @ImJust_Joking"
                 result = await client(
                     CreateChannelRequest(
                         title=clean_title,

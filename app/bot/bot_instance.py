@@ -14,3 +14,19 @@ if settings.BOT_TOKEN:
     )
 
 dp = Dispatcher()
+
+_bot_username = None
+
+async def get_bot_username() -> str:
+    global _bot_username
+    if _bot_username:
+        return _bot_username
+    if bot:
+        try:
+            me = await bot.get_me()
+            if me and me.username:
+                _bot_username = me.username
+                return _bot_username
+        except Exception:
+            pass
+    return "TgSaverBot"

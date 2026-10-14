@@ -50,7 +50,6 @@ async def lifespan(app: FastAPI):
 
 web_app = FastAPI(title="TgSaverBot API", lifespan=lifespan)
 
-
 @web_app.get("/health")
 async def health_endpoint():
     return await health_service.check_liveness()

@@ -31,7 +31,7 @@ def format_help() -> str:
         "<b>Key Commands:</b>\n"
         "/save &lt;link&gt; — Archive one or multiple Telegram posts\n"
         "/queue — View pending and active jobs\n"
-        "/history — View completed job history\n"
+        "/history — View recent history\n"
         "/archives — Manage private archive channels\n"
         "/stats — View transfer statistics and speed\n"
         "/login — Connect your Telegram user account\n"

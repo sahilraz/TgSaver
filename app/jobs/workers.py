@@ -31,6 +31,9 @@ class BatchWorker:
     async def start(self):
         self._running = True
         logger.info("BatchWorker started.")
+        # Run retention cleanup in background daily
+        asyncio.create_task(self._retention_cleanup_loop())
+
         while self._running:
             try:
                 batch_id = await job_queue.get_next_job()
@@ -45,6 +48,21 @@ class BatchWorker:
             except Exception as e:
                 logger.error(f"Worker loop error: {e}")
                 await asyncio.sleep(2.0)
+
+    async def _retention_cleanup_loop(self):
+        """Periodically purge transfer and channel records older than 30 days."""
+        while self._running:
+            try:
+                async with get_db_session() as session:
+                    repo = Repository(session)
+                    deleted_count = await repo.cleanup_old_records(days=30)
+                    if deleted_count > 0:
+                        logger.info(f"Cleaned up {deleted_count} expired records older than 30 days.")
+            except Exception as e:
+                logger.error(f"Error in data retention cleanup job: {e}")
+
+            # Sleep 24 hours between cleanup runs
+            await asyncio.sleep(86400)
 
     async def stop(self):
         self._running = False

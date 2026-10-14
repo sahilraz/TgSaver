@@ -1,6 +1,6 @@
 """Repository layer for database operations with strict user scoping."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Tuple, Dict, Any
 from sqlalchemy import func, select, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -334,3 +334,27 @@ class Repository:
             "total_bytes": total_bytes,
             "total_mappings": total_mappings,
         }
+
+    async def cleanup_old_records(self, days: int = 30) -> int:
+        """Purge jobs, items, channel mappings, and expired auth states older than given days. Keeps users and active sessions."""
+        cutoff = utc_now() - timedelta(days=days)
+
+        # Remove old archive items
+        res_items = await self.session.execute(delete(ArchiveItem).where(ArchiveItem.created_at < cutoff))
+        # Remove old batch jobs
+        res_batches = await self.session.execute(delete(BatchJob).where(BatchJob.created_at < cutoff))
+        # Remove old channel archive mappings
+        res_mappings = await self.session.execute(delete(ArchiveMapping).where(ArchiveMapping.created_at < cutoff))
+        # Remove stale or expired temporary auth login states
+        res_auth = await self.session.execute(
+            delete(AuthState).where((AuthState.expires_at < utc_now()) | (AuthState.created_at < cutoff))
+        )
+
+        await self.session.commit()
+        total_deleted = (
+            (res_items.rowcount or 0)
+            + (res_batches.rowcount or 0)
+            + (res_mappings.rowcount or 0)
+            + (res_auth.rowcount or 0)
+        )
+        return total_deleted

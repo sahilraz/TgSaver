@@ -48,10 +48,10 @@ async def handle_history(message: types.Message):
         batches = await repo.list_user_batches(user_id, limit=10)
 
     if not batches:
-        await message.answer("📜 <b>Job History</b>\n\nNo past archive jobs found.", reply_markup=back_to_dashboard_keyboard())
+        await message.answer("📜 <b>Recent History</b>\n\nNo past archive jobs found.", reply_markup=back_to_dashboard_keyboard())
         return
 
-    text = "📜 <b>Recent Archive History:</b>\n\n"
+    text = "📜 <b>Recent History:</b>\n\n"
     for b in batches:
         mb = round(b.bytes_transferred / (1024 * 1024), 2)
         text += (
