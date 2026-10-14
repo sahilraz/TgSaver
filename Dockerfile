@@ -1,0 +1,38 @@
+FROM python:3.12-slim AS builder
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libffi-dev \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir --user -r requirements.txt
+
+# Final runtime image
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Create unprivileged service user
+RUN groupadd -r tgsaver && useradd -r -g tgsaver -d /app -s /sbin/nologin tgsaver
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libssl3 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /root/.local /home/tgsaver/.local
+ENV PATH=/home/tgsaver/.local/bin:$PATH
+ENV PYTHONUNBUFFERED=1
+
+COPY . .
+RUN mkdir -p data temp_downloads && chown -R tgsaver:tgsaver /app
+
+USER tgsaver
+
+EXPOSE 8000
+
+CMD ["python", "main.py"]

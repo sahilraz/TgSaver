@@ -1,0 +1,72 @@
+services:
+  # 1. Web Service (Handles Webhook and Health Checks)
+  - type: web
+    name: tgsaver-web
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api.webhook_handler:web_app --host 0.0.0.0 --port $PORT
+    plan: standard
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DEPLOYMENT_PROFILE
+        value: render
+      - key: API_ID
+        sync: false
+      - key: API_HASH
+        sync: false
+      - key: BOT_TOKEN
+        sync: false
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: tgsaver-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: tgsaver-redis
+          property: connectionString
+
+  - type: worker
+    name: tgsaver-worker
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m workers.render_worker
+    plan: standard
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DEPLOYMENT_PROFILE
+        value: render
+      - key: API_ID
+        sync: false
+      - key: API_HASH
+        sync: false
+      - key: BOT_TOKEN
+        sync: false
+      - key: ENCRYPTION_KEY
+        fromService:
+          type: web
+          name: tgsaver-web
+          envVarKey: ENCRYPTION_KEY
+      - key: DATABASE_URL
+        fromDatabase:
+          name: tgsaver-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: tgsaver-redis
+          property: connectionString
+
+databases:
+  - name: tgsaver-db
+    plan: standard
+    databaseName: tgsaver
+    user: tgsaver_user
+
+redis:
+  - name: tgsaver-redis
+    plan: standard
