@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 # Global per-(user_id, canonical_id) lock to serialize archive creation and guarantee single channel per source
 _creation_locks: Dict[Tuple[int, str], asyncio.Lock] = defaultdict(asyncio.Lock)
 
-
 class ChannelService:
     @staticmethod
     async def resolve_entity(client: TelegramClient, channel_ref: str) -> Tuple[Optional[Any], Optional[str]]:
@@ -141,15 +140,31 @@ class ChannelService:
 
             # 4. Create a single private archive channel for this source only if no match was found anywhere
             try:
+                channel_desc = f"Private archive for {source_title[:60]}. Managed by TgSaverBot.\n\nDeveloper: @ImJust_Joking"
                 result = await client(
                     CreateChannelRequest(
                         title=clean_title,
-                        about=f"Private archive for {source_title}. Managed by TgSaverBot.",
+                        about=channel_desc,
                         megagroup=False,
                     )
                 )
                 created_channel: Channel = result.chats[0]
                 dest_channel_id = int(f"-100{created_channel.id}")
+
+                # Set random anime avatar for newly created archive channel
+                avatar_bytes = await ChannelService._fetch_random_avatar()
+                if avatar_bytes:
+                    try:
+                        import io
+                        from telethon.tl.functions.channels import EditPhotoRequest
+                        from telethon.tl.types import InputChatUploadedPhoto
+
+                        uploaded_photo = await client.upload_file(io.BytesIO(avatar_bytes), file_name="channel_logo.png")
+                        input_channel = await client.get_input_entity(created_channel)
+                        await client(EditPhotoRequest(channel=input_channel, photo=InputChatUploadedPhoto(file=uploaded_photo)))
+                        logger.info(f"Successfully set random anime avatar for channel '{clean_title}'.")
+                    except Exception as photo_err:
+                        logger.warning(f"Could not set avatar for channel '{clean_title}' (non-fatal): {photo_err}")
 
                 # Save mapping under canonical peer ID and original reference
                 async with get_db_session() as session:
@@ -234,3 +249,39 @@ class ChannelService:
                 logger.info(f"Created new '{folder_name}' chat folder (id={new_folder_id}) and added archive channel.")
         except Exception as e:
             logger.warning(f"Could not add channel to '{folder_name}' folder (non-fatal): {e}")
+
+    @staticmethod
+    async def _fetch_random_avatar() -> Optional[bytes]:
+        """Fetches a random avatar image from free anime/character APIs with waifu.im fallback."""
+        import httpx
+
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as http_client:
+            # 1. Primary: waifu.im API as specified by user
+            try:
+                r = await http_client.get("https://api.waifu.im/images", params={"is_nsfw": "false"})
+                if r.status_code == 200:
+                    data = r.json()
+                    items = data.get("items", [])
+                    if items and isinstance(items, list):
+                        img_url = items[0].get("url")
+                        if img_url:
+                            img_r = await http_client.get(img_url)
+                            if img_r.status_code == 200 and img_r.content:
+                                return img_r.content
+            except Exception as e:
+                logger.debug(f"waifu.im avatar fetch error: {e}")
+
+            # 2. Fallback: waifu.pics sfw API
+            try:
+                r = await http_client.get("https://api.waifu.pics/sfw/waifu")
+                if r.status_code == 200:
+                    data = r.json()
+                    img_url = data.get("url")
+                    if img_url:
+                        img_r = await http_client.get(img_url)
+                        if img_r.status_code == 200 and img_r.content:
+                            return img_r.content
+            except Exception as e:
+                logger.debug(f"waifu.pics avatar fetch error: {e}")
+
+        return None
